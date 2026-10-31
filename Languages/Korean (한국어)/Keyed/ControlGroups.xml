@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LanguageData>
+  <CG_SettingsCategory>부대 지정</CG_SettingsCategory>
+  <CG_ModeAlt>Alt 모드</CG_ModeAlt>
+  <CG_ModeAltDesc>Alt+숫자로 부대 선택</CG_ModeAltDesc>
+  <CG_ModeBare>숫자 모드</CG_ModeBare>
+  <CG_ModeBareDesc>숫자만으로 부대 선택 (지정된 번호만, 나머지는 게임 속도 키 유지)</CG_ModeBareDesc>
+  <CG_GroupSet>부대 {0} 지정 ({1})</CG_GroupSet>
+  <CG_GroupAdded>부대 {0}에 추가 ({1})</CG_GroupAdded>
+  <CG_GroupCleared>부대 {0} 해제</CG_GroupCleared>
+</LanguageData>
