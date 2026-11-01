@@ -1,11 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LanguageData>
-  <CG_SettingsCategory>Control Groups</CG_SettingsCategory>
-  <CG_ModeAlt>Alt mode</CG_ModeAlt>
-  <CG_ModeAltDesc>Select a group with Alt+number.</CG_ModeAltDesc>
-  <CG_ModeBare>Number-only mode</CG_ModeBare>
-  <CG_ModeBareDesc>Select a group with just the number (only assigned numbers; other numbers keep their game speed keys).</CG_ModeBareDesc>
   <CG_GroupSet>Group {0} set ({1})</CG_GroupSet>
   <CG_GroupAdded>Added to group {0} ({1})</CG_GroupAdded>
-  <CG_GroupCleared>Group {0} cleared</CG_GroupCleared>
 </LanguageData>

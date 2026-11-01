@@ -17,48 +17,6 @@ namespace ControlGroups
         }
     }
 
-    public enum RecallMode { Alt, Bare }
-
-    public class ControlGroupsSettings : ModSettings
-    {
-        public RecallMode recallMode = RecallMode.Alt;
-
-        public override void ExposeData()
-        {
-            Scribe_Values.Look(ref recallMode, "recallMode", RecallMode.Alt);
-        }
-    }
-
-    public class ControlGroupsMod : Mod
-    {
-        public static ControlGroupsSettings Settings;
-
-        public ControlGroupsMod(ModContentPack content) : base(content)
-        {
-            Settings = GetSettings<ControlGroupsSettings>();
-        }
-
-        public override string SettingsCategory() => "CG_SettingsCategory".Translate();
-
-        public override void DoSettingsWindowContents(Rect inRect)
-        {
-            var l = new Listing_Standard();
-            l.Begin(inRect);
-            if (l.RadioButton("CG_ModeAlt".Translate(), Settings.recallMode == RecallMode.Alt, 0f, "CG_ModeAltDesc".Translate()))
-                Settings.recallMode = RecallMode.Alt;
-            Text.Font = GameFont.Tiny;
-            l.Label("CG_ModeAltDesc".Translate());
-            Text.Font = GameFont.Small;
-            l.Gap(6f);
-            if (l.RadioButton("CG_ModeBare".Translate(), Settings.recallMode == RecallMode.Bare, 0f, "CG_ModeBareDesc".Translate()))
-                Settings.recallMode = RecallMode.Bare;
-            Text.Font = GameFont.Tiny;
-            l.Label("CG_ModeBareDesc".Translate());
-            Text.Font = GameFont.Small;
-            l.End();
-        }
-    }
-
     public class ControlGroupsComponent : GameComponent
     {
         public const int Count = 10;
@@ -116,29 +74,22 @@ namespace ControlGroups
             ControlGroupsComponent comp = ControlGroupsComponent.Instance;
             if (comp == null) return;
 
-            bool ctrl = e.control || e.command;
-            if (ctrl)
+            // 지정은 mac 에서 Cmd, 그 외 Ctrl. mac 의 Ctrl+숫자는 데스크탑 전환과 겹친다
+            bool assign = Application.platform == RuntimePlatform.OSXPlayer ? e.command : e.control;
+            // 스타처럼 지정은 Cmd(Ctrl)+숫자, 추가는 Shift+숫자
+            if (assign != e.shift)
             {
                 Assign(comp, n, e.shift);
                 e.Use();
                 return;
             }
-            if (e.shift) return;
+            if (e.shift || e.control || e.command) return;
 
-            if ((ControlGroupsMod.Settings?.recallMode ?? RecallMode.Alt) == RecallMode.Alt)
-            {
-                if (!e.alt) return;
-                Recall(comp, n);
-                e.Use();
-            }
-            else
-            {
-                if (e.alt) return;
-                comp.Prune(n);
-                if (comp.groups[n].Count == 0) return;
-                Recall(comp, n);
-                e.Use();
-            }
+            // 선택은 Alt(mac Option)+숫자. 맨 숫자는 게임 속도 키로 남긴다
+            if (!e.alt) return;
+            // 빈 부대여도 소비해야 Alt+1 이 배속으로 새지 않는다
+            e.Use();
+            Recall(comp, n);
         }
 
         static int NumberOf(KeyCode k)
@@ -151,6 +102,8 @@ namespace ControlGroups
         static void Assign(ControlGroupsComponent comp, int n, bool add)
         {
             List<Pawn> selected = Find.Selector.SelectedPawns;
+            // 빈 선택으로 부대가 날아가지 않게 아무것도 안 한다
+            if (selected.Count == 0) return;
             List<Pawn> g = comp.groups[n];
             if (add)
             {
@@ -161,8 +114,7 @@ namespace ControlGroups
             }
             g.Clear();
             g.AddRange(selected);
-            string key = g.Count == 0 ? "CG_GroupCleared" : "CG_GroupSet";
-            Messages.Message(key.Translate(n, g.Count), MessageTypeDefOf.SilentInput, historical: false);
+            Messages.Message("CG_GroupSet".Translate(n, g.Count), MessageTypeDefOf.SilentInput, historical: false);
         }
 
         static void Recall(ControlGroupsComponent comp, int n)
