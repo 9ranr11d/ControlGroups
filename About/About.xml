@@ -16,5 +16,11 @@
   <loadAfter>
     <li>brrainz.harmony</li>
   </loadAfter>
-  <description>StarCraft-style control groups. Ctrl+number assigns the selected pawns to a group, Alt+number (or just the number) recalls it, and pressing it twice jumps the camera.</description>
+  <description>StarCraft-style control groups for pawns.
+
+- Ctrl+number (Cmd+number on Mac): assign the selected pawns to group 0-9
+- Shift+number: add the selected pawns to the group
+- Alt+number (Option+number on Mac): select the group; press twice quickly to jump the camera to it
+- Plain number keys stay as game speed keys
+- Groups are saved with the game and can include pawns on other maps or in caravans</description>
 </ModMetaData>
