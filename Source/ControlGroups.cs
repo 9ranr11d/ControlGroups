@@ -74,22 +74,16 @@ namespace ControlGroups
             ControlGroupsComponent comp = ControlGroupsComponent.Instance;
             if (comp == null) return;
 
-            // 지정은 mac 에서 Cmd, 그 외 Ctrl. mac 의 Ctrl+숫자는 데스크탑 전환과 겹친다
-            bool assign = Application.platform == RuntimePlatform.OSXPlayer ? e.command : e.control;
-            // 스타처럼 지정은 Cmd(Ctrl)+숫자, 추가는 Shift+숫자
-            if (assign != e.shift)
-            {
-                Assign(comp, n, e.shift);
-                e.Use();
-                return;
-            }
-            if (e.shift || e.control || e.command) return;
-
-            // 선택은 Alt(mac Option)+숫자. 맨 숫자는 게임 속도 키로 남긴다
-            if (!e.alt) return;
-            // 빈 부대여도 소비해야 Alt+1 이 배속으로 새지 않는다
+            // 선택은 Ctrl. mac 은 Cmd 도 받는다 — Ctrl+숫자가 데스크탑 전환 단축키로 켜져 있으면 게임에 안 오기 때문
+            bool recall = e.control || (Application.platform == RuntimePlatform.OSXPlayer && e.command);
+            // 조합키는 하나만 눌렸을 때만 받는다. 맨 숫자는 게임 속도 키로 남긴다
+            int mods = (recall ? 1 : 0) + (e.alt ? 1 : 0) + (e.shift ? 1 : 0);
+            if (mods != 1) return;
+            // 빈 부대여도 소비해야 조합키+숫자가 배속으로 새지 않는다
             e.Use();
-            Recall(comp, n);
+            if (recall) Recall(comp, n);
+            // 지정은 Alt(mac Option)+숫자, 추가는 Shift+숫자
+            else Assign(comp, n, e.shift);
         }
 
         static int NumberOf(KeyCode k)

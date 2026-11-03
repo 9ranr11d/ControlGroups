@@ -18,9 +18,9 @@
   </loadAfter>
   <description>StarCraft-style control groups for pawns.
 
-- Ctrl+number (Cmd+number on Mac): assign the selected pawns to group 0-9
+- Ctrl+number (Cmd+number also works on Mac): select the group; press twice quickly to jump the camera to it
+- Alt+number (Option+number on Mac): assign the selected pawns to group 0-9
 - Shift+number: add the selected pawns to the group
-- Alt+number (Option+number on Mac): select the group; press twice quickly to jump the camera to it
 - Plain number keys stay as game speed keys
 - Groups are saved with the game and can include pawns on other maps or in caravans</description>
 </ModMetaData>
