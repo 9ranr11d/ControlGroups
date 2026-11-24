@@ -16,11 +16,18 @@
   <loadAfter>
     <li>brrainz.harmony</li>
   </loadAfter>
-  <description>StarCraft-style control groups for pawns.
+  <description>StarCraft-style control groups for pawns, animals, mechs and buildings.
 
 - Ctrl+number (Cmd+number also works on Mac): select the group; press twice quickly to jump the camera to it
 - Alt+number (Option+number on Mac): assign the selected pawns to group 0-9
 - Shift+number: add the selected pawns to the group
 - Plain number keys stay as game speed keys
-- Groups are saved with the game and can include pawns on other maps or in caravans</description>
+- Groups are saved with the game and can include pawns on other maps or in caravans
+
+Selection grid (when 2 or more things are selected):
+- A StarCraft-style grid of portraits/icons appears above the inspect pane
+- Each cell shows health, plus hunger (people/animals) or power (mechs), and mood as a background fill that turns red at break risk
+- Drafted pawns are outlined in red
+- Click a cell to select only that one, Shift+click to remove it, Ctrl/Cmd+click to keep only that kind
+- The "-" button collapses the grid to a small tab</description>
 </ModMetaData>
