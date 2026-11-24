@@ -2,4 +2,14 @@
 <LanguageData>
   <CG_GroupSet>부대 {0} 지정 ({1})</CG_GroupSet>
   <CG_GroupAdded>부대 {0}에 추가 ({1})</CG_GroupAdded>
+  <CG_AreaLabel>허가 구역</CG_AreaLabel>
+  <CG_FoodLabel>식량 정책</CG_FoodLabel>
+  <CG_OutfitLabel>복장 정책</CG_OutfitLabel>
+  <CG_DrugLabel>약물 정책</CG_DrugLabel>
+  <CG_ReadingLabel>독서 정책</CG_ReadingLabel>
+  <CG_Multiple>여러 개</CG_Multiple>
+  <CG_Drafted>소집됨</CG_Drafted>
+  <CG_GridTip>클릭: 이것만 선택\nShift+클릭: 선택에서 빼기\nCtrl/Cmd+클릭: 같은 종류만 남기기\n드래그: 박스 안만 남기기\nShift+드래그: 박스 안 빼기</CG_GridTip>
+  <CG_GridMinimize>선택 창 접기</CG_GridMinimize>
+  <CG_GridRestore>선택 창 펼치기 ({0}개 선택됨)</CG_GridRestore>
 </LanguageData>

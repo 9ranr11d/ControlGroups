@@ -20,11 +20,12 @@ namespace ControlGroups
     public class ControlGroupsComponent : GameComponent
     {
         public const int Count = 10;
-        public List<Pawn>[] groups = new List<Pawn>[Count];
+        // 폰뿐 아니라 건물·물건도 부대에 넣는다(스타처럼 생산 건물 지정). 예전 세이브의 List<Pawn> 참조도 Thing 으로 그대로 읽힌다
+        public List<Thing>[] groups = new List<Thing>[Count];
 
         public ControlGroupsComponent(Game game)
         {
-            for (int i = 0; i < Count; i++) groups[i] = new List<Pawn>();
+            for (int i = 0; i < Count; i++) groups[i] = new List<Thing>();
         }
 
         public static ControlGroupsComponent Instance => Current.Game?.GetComponent<ControlGroupsComponent>();
@@ -36,20 +37,21 @@ namespace ControlGroups
                 for (int i = 0; i < Count; i++) Prune(i);
             for (int i = 0; i < Count; i++)
             {
-                List<Pawn> list = groups[i];
+                List<Thing> list = groups[i];
                 Scribe_Collections.Look(ref list, "group" + i, LookMode.Reference);
                 if (Scribe.mode == LoadSaveMode.PostLoadInit || Scribe.mode == LoadSaveMode.LoadingVars)
                 {
-                    list = list ?? new List<Pawn>();
-                    list.RemoveAll(p => p == null);
+                    list = list ?? new List<Thing>();
+                    list.RemoveAll(t => t == null);
                 }
-                groups[i] = list ?? new List<Pawn>();
+                groups[i] = list ?? new List<Thing>();
             }
         }
 
         public void Prune(int n)
         {
-            groups[n].RemoveAll(p => p == null || p.Destroyed || p.Dead || p.Discarded);
+            // 건물은 부수거나 해체하면 Destroyed. 포장(미니파이)된 건물은 Destroyed 가 아니라 남겨 두고, 다시 설치하면 부대로 돌아온다
+            groups[n].RemoveAll(t => t == null || t.Destroyed || t.Discarded || (t is Pawn p && p.Dead));
         }
     }
 
@@ -67,7 +69,9 @@ namespace ControlGroups
             if (Find.WindowStack.AnySearchWidgetFocused) return;
             // 이름 변경·키 지정 같은 모달 창이 떠 있으면 입력을 그 창에 맡긴다
             if (Find.WindowStack.Windows.Any(w => w.absorbInputAroundWindow)) return;
-            if (WorldRendererUtility.WorldRendered) return;
+            // 월드 지도를 열었을 때만 막는다. WorldRendered 는 소행성·궤도 맵에서 행성을 배경으로 그릴 때도 참이라
+            // 그걸 쓰면 우주 맵에서 부대 키가 전부 먹통이 된다
+            if (WorldRendererUtility.WorldSelected) return;
 
             int n = NumberOf(e.keyCode);
             if (n < 0) return;
@@ -95,14 +99,17 @@ namespace ControlGroups
 
         static void Assign(ControlGroupsComponent comp, int n, bool add)
         {
-            List<Pawn> selected = Find.Selector.SelectedPawns;
+            // 구역(Zone)·플랜 같은 Thing 아닌 선택은 뺀다
+            List<Thing> selected = new List<Thing>();
+            foreach (object o in Find.Selector.SelectedObjects)
+                if (o is Thing t && t.Spawned) selected.Add(t);
             // 빈 선택으로 부대가 날아가지 않게 아무것도 안 한다
             if (selected.Count == 0) return;
-            List<Pawn> g = comp.groups[n];
+            List<Thing> g = comp.groups[n];
             if (add)
             {
-                foreach (Pawn p in selected)
-                    if (!g.Contains(p)) g.Add(p);
+                foreach (Thing t in selected)
+                    if (!g.Contains(t)) g.Add(t);
                 Messages.Message("CG_GroupAdded".Translate(n, g.Count), MessageTypeDefOf.SilentInput, historical: false);
                 return;
             }
@@ -114,22 +121,23 @@ namespace ControlGroups
         static void Recall(ControlGroupsComponent comp, int n)
         {
             comp.Prune(n);
-            List<Pawn> g = comp.groups[n];
+            List<Thing> g = comp.groups[n];
             if (g.Count == 0) return;
 
             Map map = Find.CurrentMap;
-            List<Pawn> here = g.Where(p => p.Spawned && p.Map == map).ToList();
+            List<Thing> here = g.Where(t => t.Spawned && t.Map == map).ToList();
             if (here.Count == 0)
             {
-                // 다른 맵·캐러밴: 첫 멤버로 점프한 뒤 그 맵 멤버를 선택
-                Pawn target = g.FirstOrDefault(p => p.Spawned) ?? g[0];
+                // 다른 맵·캐러밴: 첫 멤버로 점프한 뒤 그 맵 멤버를 선택. 포장돼 들려 있는 건물만 남았으면 할 게 없다
+                Thing target = g.FirstOrDefault(t => t.Spawned) ?? g.OfType<Pawn>().FirstOrDefault();
+                if (target == null) return;
                 CameraJumper.TryJumpAndSelect(new GlobalTargetInfo(target));
                 Map m = Find.CurrentMap;
-                here = g.Where(p => p.Spawned && p.Map == m).ToList();
+                here = g.Where(t => t.Spawned && t.Map == m).ToList();
                 if (here.Count == 0) return;
             }
             Find.Selector.ClearSelection();
-            foreach (Pawn p in here) Find.Selector.Select(p, playSound: false, forceDesignatorDeselect: true);
+            foreach (Thing t in here) Find.Selector.Select(t, playSound: false, forceDesignatorDeselect: true);
 
             float now = Time.realtimeSinceStartup;
             if (lastRecallGroup == n && now - lastRecallTime <= 0.4f)
