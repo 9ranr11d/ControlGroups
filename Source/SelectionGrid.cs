@@ -1,3 +1,4 @@
+using System.Linq;
 using System.Collections.Generic;
 using HarmonyLib;
 using RimWorld;
@@ -199,7 +200,7 @@ namespace ControlGroups
                     List<Thing> hit = new List<Thing>();
                     for (int i = 0; i < cellRects.Count; i++)
                         if (cellRects[i].Overlaps(box)) hit.Add(things[i]);
-                    if (hit.Count > 0) OnBox(hit, e.shift);
+                    if (hit.Count > 0) OnBox(hit, e.shift || e.control || e.command); // Ctrl/Cmd+드래그도 빼기(정착민 바·지도와 같은 키)
                     break;
             }
         }
@@ -379,23 +380,54 @@ namespace ControlGroups
         }
     }
 
-    // 정착민 바(위 초상화)에서 Shift+드래그 = 토글(2026-11-25 사용자: 이미 선택한 애들을 Shift+드래그로 못 뺀다).
-    // 바닐라는 Shift+드래그면 무조건 추가만 한다. 박스에 걸린 정착민이 전부 이미 선택돼 있으면 그들을 선택에서 빼고,
-    // 하나라도 선택 안 된 게 있으면 바닐라대로 추가(스타식: 섞여 있으면 추가, 다 선택돼 있으면 빼기).
-    // 정착민 바 밖(지도) 드래그는 건드리지 않는다.
+    // Ctrl/Cmd+드래그 = 박스 안을 선택에서 빼기(정착민 바 초상화·지도 공통, 2026-11-25 사용자). 빼기 모드면 드래그 박스를 빨갛게 그린다.
+    // Shift+드래그는 바닐라대로 추가. 용도: 부대를 부른 뒤 아기 안은 애·기분 나쁜 애를 소집에서 빼기.
+    // 박스에 정착민 바 초상화가 걸리면 그것만, 아니면 지도 위 물건(바닐라 드래그 선택과 같은 후보)에서 뺀다.
+    // (~같은 날 기각: Shift 토글 "전부 선택돼 있으면 빼기", Shift 항상 빼기, Shift 시작 칸으로 가르기 — 쓰기 애매.)
+    public static class DragRemove
+    {
+        public static bool Held
+        {
+            get
+            {
+                Event e = Event.current;
+                if (e != null && (e.control || e.command)) return true;
+                return Input.GetKey(KeyCode.LeftControl) || Input.GetKey(KeyCode.RightControl)
+                    || Input.GetKey(KeyCode.LeftCommand) || Input.GetKey(KeyCode.RightCommand);
+            }
+        }
+    }
+
+    // 바닐라는 MouseUp 에서 dragBox.active=false 로 바꾼 직후 이 함수를 부른다 — active 는 보지 않는다
     [HarmonyPatch(typeof(Selector), "SelectInsideDragBox")]
-    public static class Patch_Selector_ColonistBarShiftDragToggle
+    public static class Patch_Selector_DragRemove
     {
         public static bool Prefix(Selector __instance)
         {
-            if (!Selector.ShiftIsHeld || Find.ColonistBar == null) return true;
-            List<Thing> boxed = Find.ColonistBar.MapColonistsOrCorpsesInScreenRect(__instance.dragBox.ScreenRect);
-            if (boxed == null || boxed.Count == 0) return true;
+            if (!DragRemove.Held) return true;
+            Rect rect = __instance.dragBox.ScreenRect;
+            List<Thing> boxed = Find.ColonistBar?.MapColonistsOrCorpsesInScreenRect(rect);
+            if (boxed == null || boxed.Count == 0)
+                boxed = ThingSelectionUtility.MultiSelectableThingsInScreenRectDistinct(rect).ToList();
             for (int i = 0; i < boxed.Count; i++)
-                if (!__instance.IsSelected(boxed[i])) return true;
-            for (int i = 0; i < boxed.Count; i++)
-                __instance.Deselect(boxed[i]);
+                if (__instance.IsSelected(boxed[i])) __instance.Deselect(boxed[i]);
             return false;
+        }
+    }
+
+    [HarmonyPatch(typeof(DragBox), nameof(DragBox.DragBoxOnGUI))]
+    public static class Patch_DragBox_RemoveModeColor
+    {
+        public static void Prefix(DragBox __instance, out Color __state)
+        {
+            __state = GUI.color;
+            if (Find.Selector != null && Find.Selector.dragBox == __instance && DragRemove.Held)
+                GUI.color = DraftMark.Border;
+        }
+
+        public static void Postfix(Color __state)
+        {
+            GUI.color = __state;
         }
     }
 }

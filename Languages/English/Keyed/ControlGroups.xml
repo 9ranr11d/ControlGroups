@@ -9,7 +9,7 @@
   <CG_ReadingLabel>Reading policy</CG_ReadingLabel>
   <CG_Multiple>Multiple</CG_Multiple>
   <CG_Drafted>drafted</CG_Drafted>
-  <CG_GridTip>Click: select only this\nShift+click: remove from selection\nCtrl/Cmd+click: keep only this kind\nDrag: keep only boxed\nShift+drag: remove boxed</CG_GridTip>
+  <CG_GridTip>Click: select only this\nShift+click: remove from selection\nCtrl/Cmd+click: keep only this kind\nDrag: keep only boxed\nShift or Ctrl/Cmd+drag: remove boxed</CG_GridTip>
   <CG_GridMinimize>Minimize selection panel</CG_GridMinimize>
   <CG_GridRestore>Show selection panel ({0} selected)</CG_GridRestore>
 </LanguageData>

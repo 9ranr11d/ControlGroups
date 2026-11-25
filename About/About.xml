@@ -29,5 +29,10 @@ Selection grid (when 2 or more things are selected):
 - Each cell shows health, plus hunger (people/animals) or power (mechs), and mood as a background fill that turns red at break risk
 - Drafted pawns are outlined in red
 - Click a cell to select only that one, Shift+click to remove it, Ctrl/Cmd+click to keep only that kind
-- The "-" button collapses the grid to a small tab</description>
+- Drag over cells to keep only the boxed ones; Shift+drag or Ctrl/Cmd+drag removes them
+- The "-" button collapses the grid to a small tab
+
+Drag selection:
+- Ctrl/Cmd+drag on the map or over the colonist bar portraits removes the boxed things from the selection (the box turns red)
+- Shift+drag adds to the selection as usual</description>
 </ModMetaData>
