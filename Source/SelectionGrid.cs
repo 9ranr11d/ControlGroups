@@ -366,7 +366,8 @@ namespace ControlGroups
     [HarmonyPatch(typeof(ColonistBarColonistDrawer), nameof(ColonistBarColonistDrawer.DrawColonist))]
     public static class Patch_ColonistBar_DraftMark
     {
-        public static void Postfix(Rect rect, Pawn colonist)
+        // Prefix: 바닐라보다 먼저 그려 이름표가 테두리 위에 오게 한다(Postfix 면 아래 테두리가 이름을 가림, 2026-11-25 사용자)
+        public static void Prefix(Rect rect, Pawn colonist)
         {
             if (colonist == null || colonist.Dead || !colonist.Drafted) return;
             // 칸 안을 붉게 덮으면 기분 배경·초상화가 가려진다(2026-11-24 사용자) → 칸 바깥에 빨간 테두리만
@@ -375,6 +376,26 @@ namespace ControlGroups
             GUI.color = DraftMark.Border;
             Widgets.DrawBox(rect.ExpandedBy(thick), thick);
             GUI.color = prev;
+        }
+    }
+
+    // 정착민 바(위 초상화)에서 Shift+드래그 = 토글(2026-11-25 사용자: 이미 선택한 애들을 Shift+드래그로 못 뺀다).
+    // 바닐라는 Shift+드래그면 무조건 추가만 한다. 박스에 걸린 정착민이 전부 이미 선택돼 있으면 그들을 선택에서 빼고,
+    // 하나라도 선택 안 된 게 있으면 바닐라대로 추가(스타식: 섞여 있으면 추가, 다 선택돼 있으면 빼기).
+    // 정착민 바 밖(지도) 드래그는 건드리지 않는다.
+    [HarmonyPatch(typeof(Selector), "SelectInsideDragBox")]
+    public static class Patch_Selector_ColonistBarShiftDragToggle
+    {
+        public static bool Prefix(Selector __instance)
+        {
+            if (!Selector.ShiftIsHeld || Find.ColonistBar == null) return true;
+            List<Thing> boxed = Find.ColonistBar.MapColonistsOrCorpsesInScreenRect(__instance.dragBox.ScreenRect);
+            if (boxed == null || boxed.Count == 0) return true;
+            for (int i = 0; i < boxed.Count; i++)
+                if (!__instance.IsSelected(boxed[i])) return true;
+            for (int i = 0; i < boxed.Count; i++)
+                __instance.Deselect(boxed[i]);
+            return false;
         }
     }
 }
