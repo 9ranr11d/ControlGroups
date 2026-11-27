@@ -1,4 +1,6 @@
+using System;
 using System.Linq;
+using System.Reflection;
 using System.Collections.Generic;
 using HarmonyLib;
 using RimWorld;
@@ -15,10 +17,13 @@ namespace ControlGroups
         public static readonly Color Fill = new Color(0.95f, 0.22f, 0.18f, 0.22f);
     }
 
-    // 스타크래프트처럼 여러 개를 고르면 검사 창 바로 위에 고른 것들을 칸으로 늘어놓는다.
+    // 스타크래프트처럼 하나 이상 고르면 검사 창 바로 위에 고른 것들을 칸으로 늘어놓는다(1개일 때도, 2026-11-26).
     // 클릭 = 그것만 선택, Shift+클릭 = 선택에서 빼기, Ctrl/Cmd+클릭 = 같은 종류만 남기기,
     // 칸 위 드래그 = 박스에 걸친 칸만 남기기, Shift+드래그 = 그 칸들 빼기.
     // 검사 창(MainTabWindow_Inspect) 안은 창 영역으로 잘리므로, 단일 선택 때 탭을 창 위에 그리는 ExtraOnGUI 에 붙인다.
+    // ExtraOnGUI 는 선택 수와 무관하게 불린다(MainTabWindow_Inspect.ExtraOnGUI). RimHUD 는 InspectPaneOnGUI(창 안쪽)만 Prefix 로 대체하고
+    // PaneTopY·PaneWidthFor·DoTabs 는 자기 값으로 패치하므로, 우리는 pane.PaneTopY·PaneWidthFor 만 읽어 따라간다.
+    // 1개 선택이면 탭 줄(PaneTopY-30, 높이 30)이 그 자리에 있어 격자를 그 위로 올린다. 탭이 열려 있으면 탭 창이 위로 커져 가리니 숨긴다
     // ExtraOnGUI 는 WindowStack 안에서 Selector 보다 먼저 불리므로, 여기서 클릭을 Use 하면 지도 선택·드래그 박스로 새지 않는다
     [HarmonyPatch(typeof(InspectPaneUtility), nameof(InspectPaneUtility.ExtraOnGUI))]
     public static class Patch_InspectPane_SelectionGrid
@@ -32,6 +37,70 @@ namespace ControlGroups
         const float BarHeight = 3f * (1f + OneBar);
         static readonly Color RestColor = new Color(0.65f, 0.5f, 0.95f);
         const float Gap = 3f;
+        const float TabStripHeight = 30f;
+
+        // 무기 아이콘: 초상화 바로 아래 전용 줄(초상화를 가리지 않게). 18px, 가운데
+        const float WeaponSize = 18f;
+        const float WeaponRow = 20f;
+
+        // ---- Useful Marks 연동 (리플렉션, 한 번만 찾는다. 없으면 조용히 건너뜀) ----
+        static bool marksSearched;
+        static MethodInfo drawMarks;
+        static FieldInfo drawingAtBarField;
+        static PropertyInfo markSizeProp;
+        static bool marksFound;
+        static bool marksWarned;
+        // 아래 마크 한 줄 높이: UM 이 정착민 바에서 쓰는 값 그대로(offset=(MarkSize-5)/UIScale, 마크 중심 기준)
+        static float MarkRowHeight
+        {
+            get
+            {
+                if (!marksFound) return 0f;
+                try
+                {
+                    float inv = 1f / Prefs.UIScale;
+                    float ms = ((Vector2)markSizeProp.GetValue(null, null)).y;
+                    return (ms - 5f) * inv + (ms - 16f) / 2f * inv + ms / 2f * inv + 1f;
+                }
+                catch { return 20f; }
+            }
+        }
+
+        static void FindMarks()
+        {
+            marksSearched = true;
+            try
+            {
+                Type t = AccessTools.TypeByName("UsefulMarks.NamePlatePatches");
+                if (t == null) return;
+                drawMarks = AccessTools.Method(t, "DrawMarks", new[] { typeof(Pawn), typeof(Rect), typeof(float) });
+                Type flags = AccessTools.TypeByName("UsefulMarks.NamePlatePatches+GenMapUI_DrawPawnLabel_Patch");
+                drawingAtBarField = flags == null ? null : AccessTools.Field(flags, "DrawingAtColonistBar");
+                Type assets = AccessTools.TypeByName("UsefulMarks.Assets");
+                markSizeProp = assets == null ? null : AccessTools.Property(assets, "MarkSize");
+                marksFound = drawMarks != null && markSizeProp != null;
+            }
+            catch (Exception ex)
+            {
+                drawMarks = null;
+                marksFound = false;
+                Log.Warning("[ControlGroups] Useful Marks 연동 실패, 마크 줄을 비웁니다: " + ex.Message);
+            }
+        }
+
+        // 탭 줄이 있는지, 열린 탭이 있는지 (바닐라 DoTabs·RimHUD InspectPaneTabs 와 같은 조건)
+        static void TabState(IInspectPane pane, out bool strip, out bool open)
+        {
+            strip = false;
+            open = false;
+            if (pane.CurTabs == null) return;
+            foreach (InspectTabBase tab in pane.CurTabs)
+            {
+                if (!tab.IsVisible) continue;
+                if (!tab.Hidden) strip = true;
+                if (tab.GetType() == pane.OpenTabType) open = true;
+            }
+        }
 
         // 정착민 바와 같은 기분 배경색 (바닐라 ColonistBarColonistDrawer.MoodBGTex 와 같은 값)
         static readonly Texture2D MoodBGTex = SolidColorMaterials.NewSolidColorTexture(new Color(0.4f, 0.47f, 0.53f, 0.44f));
@@ -72,13 +141,20 @@ namespace ControlGroups
             // 구역 지정 같은 도구가 창 위에 자체 조작판을 그릴 때는 비켜 준다
             if (Find.DesignatorManager.SelectedDesignator != null) return false;
             Selector sel = Find.Selector;
-            if (sel == null || sel.NumSelected <= 1) return false;
+            if (sel == null || sel.NumSelected < 1) return false;
 
             things.Clear();
             List<object> selected = sel.SelectedObjects;
             for (int i = 0; i < selected.Count; i++)
                 if (selected[i] is Thing t && t.Spawned) things.Add(t);
-            if (things.Count <= 1) return false;
+            if (things.Count < 1) return false;
+            // 하나만 골랐을 땐 사람·메카 같은 폰만 — 건물 하나에 칸 하나는 검사 창과 같은 말을 반복할 뿐이다
+            if (things.Count == 1 && !(things[0] is Pawn)) return false;
+
+            TabState(pane, out bool tabStrip, out bool tabOpen);
+            if (tabOpen) return false;
+            if (!marksSearched) FindMarks();
+            float topY = pane.PaneTopY - (tabStrip ? TabStripHeight : 0f);
 
             float width = InspectPaneUtility.PaneWidthFor(pane);
             GameFont prevFont = Text.Font;
@@ -89,7 +165,7 @@ namespace ControlGroups
                 Text.Font = GameFont.Tiny;
                 string label = "▲ " + things.Count;
                 float tabW = Text.CalcSize(label).x + 14f;
-                Rect tab = new Rect(width - tabW, pane.PaneTopY - TabHeight, tabW, TabHeight);
+                Rect tab = new Rect(width - tabW, topY - TabHeight, tabW, TabHeight);
                 if (Widgets.ButtonText(tab, label)) minimized = false;
                 TooltipHandler.TipRegion(tab, "CG_GridRestore".Translate(things.Count));
                 Text.Font = prevFont;
@@ -104,10 +180,10 @@ namespace ControlGroups
             if (overflow) shown = maxShown - 1;
             int slots = overflow ? maxShown : shown;
             int rows = (slots + perRow - 1) / perRow;
-            float rowHeight = Cell + NameHeight + BarHeight + Gap;
+            float rowHeight = Cell + WeaponRow + NameHeight + MarkRowHeight + BarHeight + Gap;
             float height = Pad * 2f + rows * rowHeight - Gap;
 
-            Rect panel = new Rect(0f, pane.PaneTopY - height, width, height);
+            Rect panel = new Rect(0f, topY - height, width, height);
             Widgets.DrawWindowBackground(panel);
 
             // 접기 버튼: 패널 오른쪽 위 바깥(지도 쪽)에 붙여 칸을 가리지 않게
@@ -220,7 +296,7 @@ namespace ControlGroups
         static Rect CellRect(Rect panel, int index, int perRow, float rowHeight)
         {
             int r = index / perRow, c = index % perRow;
-            return new Rect(panel.x + Pad + c * (Cell + Gap), panel.y + Pad + r * rowHeight, Cell, Cell + NameHeight + BarHeight);
+            return new Rect(panel.x + Pad + c * (Cell + Gap), panel.y + Pad + r * rowHeight, Cell, Cell + WeaponRow + NameHeight + MarkRowHeight + BarHeight);
         }
 
         static void DrawCell(Rect cell, Thing t)
@@ -273,6 +349,14 @@ namespace ControlGroups
                 }
             }
 
+            // 무기: 초상화 바로 아래 전용 줄 가운데(초상화를 가리지 않는다)
+            ThingWithComps weapon = p != null && !p.Dead ? p.equipment?.Primary : null;
+            if (weapon != null)
+            {
+                Rect wr = new Rect(icon.center.x - WeaponSize / 2f, icon.yMax + (WeaponRow - WeaponSize) / 2f, WeaponSize, WeaponSize);
+                Widgets.ThingIcon(wr, weapon);
+            }
+
             if (drafted)
             {
                 // 칸 사이 틈(3px)에 바깥 테두리를 그려 안쪽(기분·초상화)은 그대로 보이게
@@ -287,13 +371,13 @@ namespace ControlGroups
             {
                 // 스타크래프트처럼 초록 → 노랑 → 빨강
                 Color col = pct > 0.66f ? new Color(0.3f, 0.85f, 0.3f) : pct > 0.33f ? new Color(0.95f, 0.8f, 0.2f) : LowColor;
-                DrawBar(new Rect(cell.x, icon.yMax + NameHeight + 1f, Cell, OneBar), pct, col);
+                DrawBar(new Rect(cell.x, icon.yMax + WeaponRow + NameHeight + MarkRowHeight + 1f, Cell, OneBar), pct, col);
             }
 
             // 허기(사람·동물) 또는 전력(메카). 굶주림·전력 부족이면 빨강
             if (p != null && p.needs != null)
             {
-                Rect bar2 = new Rect(cell.x, icon.yMax + NameHeight + 1f + OneBar + 1f, Cell, OneBar);
+                Rect bar2 = new Rect(cell.x, icon.yMax + WeaponRow + NameHeight + MarkRowHeight + 1f + OneBar + 1f, Cell, OneBar);
                 Need_MechEnergy energy = p.needs.energy;
                 Need_Food food = p.needs.food;
                 if (energy != null)
@@ -316,14 +400,49 @@ namespace ControlGroups
                 Text.Font = GameFont.Tiny;
                 Text.Anchor = TextAnchor.MiddleCenter;
                 GUI.color = drafted ? DraftMark.Border : new Color(0.85f, 0.85f, 0.85f);
-                Rect nameRect = new Rect(cell.x - 1f, icon.yMax, Cell + 2f, NameHeight);
+                Rect nameRect = new Rect(cell.x - 1f, icon.yMax + WeaponRow, Cell + 2f, NameHeight);
                 Widgets.Label(nameRect, p.LabelShort.Truncate(nameRect.width));
                 GUI.color = Color.white;
+            }
+
+            if (p != null && !p.Dead && marksFound)
+            {
+                // 정착민 바처럼 "이름표 배경" 사각형을 넘겨 UM 이 왼쪽·오른쪽·아래 마크를 그 둘레에 그대로 배치하게 한다
+                Text.Font = GameFont.Tiny;
+                string label = p.Name != null ? p.LabelShort.Truncate(Cell + 2f) : "";
+                float w = Mathf.Min(Cell + 2f, Text.CalcSize(label).x + 4f);
+                Rect bg = new Rect(cell.center.x - w / 2f, icon.yMax + WeaponRow, w, NameHeight);
+                DrawPawnMarks(p, bg);
             }
 
             string tip = t.LabelCap.ToString();
             if (drafted) tip += " (" + "CG_Drafted".Translate() + ")";
             TooltipHandler.TipRegion(icon, tip + "\n\n" + "CG_GridTip".Translate());
+        }
+
+        // Useful Marks 의 DrawMarks 는 고정 크기 마크를 bgRect 가운데에 가운데 정렬로 그린다(아래쪽 마크는 한 줄 3개 기준으로 줄바꿈).
+        // 칸(44px)에 맞게 영역으로 잘라(BeginGroup) 안에서 행렬로 줄여 그린다. 옆 마크·넘친 줄은 잘린다
+        static void DrawPawnMarks(Pawn pawn, Rect nameBg)
+        {
+            try
+            {
+                float inv = 1f / Prefs.UIScale;
+                float ms = ((Vector2)markSizeProp.GetValue(null, null)).y;
+                float offset = (ms - 5f) * inv; // UM 정착민 바와 같은 값
+                Color prevColor = GUI.color;
+                if (drawingAtBarField != null) drawingAtBarField.SetValue(null, true); // "월드 전용" 마크를 거른다
+                try { drawMarks.Invoke(null, new object[] { pawn, nameBg, offset }); }
+                finally
+                {
+                    if (drawingAtBarField != null) drawingAtBarField.SetValue(null, false);
+                    GUI.color = prevColor;
+                }
+            }
+            catch (Exception ex)
+            {
+                marksFound = false; // 다시 시도하지 않는다
+                if (!marksWarned) { marksWarned = true; Log.Warning("[ControlGroups] Useful Marks 마크 그리기 실패, 마크를 그리지 않습니다: " + ex); }
+            }
         }
 
         static void DrawBar(Rect bar, float pct, Color col)
