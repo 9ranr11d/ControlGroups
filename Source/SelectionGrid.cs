@@ -39,7 +39,7 @@ namespace ControlGroups
         const float Gap = 3f;
         const float TabStripHeight = 30f;
 
-        // 무기 아이콘: 초상화 바로 아래 전용 줄(초상화를 가리지 않게). 18px, 가운데
+        // 무기 아이콘: 초상화 바로 아래 전용 줄(초상화를 가리지 않게). 18px, 여러 개면 나란히 줄여서
         const float WeaponSize = 18f;
         const float WeaponRow = 20f;
 
@@ -349,13 +349,9 @@ namespace ControlGroups
                 }
             }
 
-            // 무기: 초상화 바로 아래 전용 줄 가운데(초상화를 가리지 않는다)
-            ThingWithComps weapon = p != null && !p.Dead ? p.equipment?.Primary : null;
-            if (weapon != null)
-            {
-                Rect wr = new Rect(icon.center.x - WeaponSize / 2f, icon.yMax + (WeaponRow - WeaponSize) / 2f, WeaponSize, WeaponSize);
-                Widgets.ThingIcon(wr, weapon);
-            }
+            // 무기: 초상화 바로 아래 전용 줄(초상화를 가리지 않는다).
+            // 든 무기 + 소지품 속 무기(Pocket Sand 등 보조 무기 모드는 인벤토리에 넣어 둔다). 든 무기가 맨 왼쪽·밝게, 보조는 흐리게
+            if (p != null && !p.Dead) DrawWeaponRow(p, new Rect(cell.x, icon.yMax, Cell, WeaponRow));
 
             if (drafted)
             {
@@ -422,6 +418,40 @@ namespace ControlGroups
 
         // Useful Marks 의 DrawMarks 는 고정 크기 마크를 bgRect 가운데에 가운데 정렬로 그린다(아래쪽 마크는 한 줄 3개 기준으로 줄바꿈).
         // 칸(44px)에 맞게 영역으로 잘라(BeginGroup) 안에서 행렬로 줄여 그린다. 옆 마크·넘친 줄은 잘린다
+        static readonly List<Thing> weaponBuf = new List<Thing>();
+
+        static void DrawWeaponRow(Pawn p, Rect row)
+        {
+            weaponBuf.Clear();
+            ThingWithComps primary = p.equipment?.Primary;
+            if (primary != null) weaponBuf.Add(primary);
+            ThingOwner inv = p.inventory?.innerContainer;
+            if (inv != null)
+                for (int i = 0; i < inv.Count; i++)
+                    if (inv[i].def.IsWeapon) weaponBuf.Add(inv[i]);
+            int n = weaponBuf.Count;
+            if (n == 0) return;
+
+            const float gap = 1f;
+            float size = Mathf.Min(WeaponSize, (row.width - gap * (n - 1)) / n);
+            float total = size * n + gap * (n - 1);
+            float x = row.center.x - total / 2f;
+            float y = row.y + (row.height - size) / 2f;
+            var tip = new System.Text.StringBuilder();
+            for (int i = 0; i < n; i++)
+            {
+                Thing w = weaponBuf[i];
+                Rect r = new Rect(x + i * (size + gap), y, size, size);
+                bool isPrimary = w == primary;
+                if (!isPrimary) GUI.color = new Color(1f, 1f, 1f, 0.55f);
+                Widgets.ThingIcon(r, w);
+                GUI.color = Color.white;
+                if (tip.Length > 0) tip.Append('\n');
+                tip.Append(isPrimary ? "▶ " : "   ").Append(w.LabelCap);
+            }
+            TooltipHandler.TipRegion(row, tip.ToString());
+        }
+
         static void DrawPawnMarks(Pawn pawn, Rect nameBg)
         {
             try
